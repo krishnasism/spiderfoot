@@ -11,10 +11,11 @@
 # -------------------------------------------------------------------------------
 
 from sflib import SpiderFoot, SpiderFootPlugin
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, AuthenticationException, ConnectionError, ConnectionTimeout, AuthorizationException, NotFoundError
 
 class sfp__stor_es(SpiderFootPlugin):
     """Elastic Search Storage::::Stores scan results into Elasticsearch instance."""
+    
     _priority = 0
 
     # Default options
@@ -22,6 +23,8 @@ class sfp__stor_es(SpiderFootPlugin):
         'endpoint_url': "",
         'username': "",
         'password': "",
+        'max_retries': 0,
+        'index': "spiderfoot"
         '_store': True,
     }
 
@@ -29,8 +32,12 @@ class sfp__stor_es(SpiderFootPlugin):
     optdescs = {
         'endpoint_url': "Endpoint URL to Elasticsearch instance",
         'username': "Elasticsearch username",
-        'password': "Elasticsearch password"
+        'password': "Elasticsearch password",
+        'index': "Specify the index of data to be stored in Elasticsearch (lowercase)"
+        'max_retries': "No. of times Spiderfoot should retry connecting to Elasticsearch endpoint in case of a failure"
     }
+
+    errorState = False  
 
     def setup(self, sfc, userOpts=dict()):
         self.sf = sfc
@@ -46,28 +53,67 @@ class sfp__stor_es(SpiderFootPlugin):
 
     # Handle events sent to this module
     def handleEvent(self, sfEvent):
+
+        if self.errorState:
+            return None
+
         if not self.opts['_store']:
             self.sf.debug("Disabled storing on Elasticsearch")
             return None
+        
+        tries = int(self.opts['max_retries']) + 1
+        tries = 2
 
-        try:
-            self.sf.debug("Creating client")
+        index = self.opts['index'].lower()
+
+        for i in range(0, tries):
+
+            try:       
+                
+                # Unique ID to identify the data
+                dataID = self.sf.GUID + sfEvent.getHash()     
+
+                esClient = Elasticsearch([self.opts['endpoint_url']], http_auth=(self.opts['username'], self.opts['password']), timeout=15, verify_certs=False)
+                
+                sfEventJSON = sfEvent.asDict()
+                
+                response = esClient.index(index=index, id=dataID, doc_type='SpiderFoot', body=sfEventJSON)
+
+                if response['result'] == "created":
+                    self.sf.debug("Storing an event to Elasticsearch: " + sfEvent.eventType)
+                
+            except AuthenticationException:
+
+                self.sf.error("Invalid credentials provided", False)
+                self.errorState = True
+                return None
             
-            esClient = Elasticsearch([self.opts['endpoint_url']], http_auth=(self.opts['username'], self.opts['password']))
-            self.sf.debug(str(esClient))
-            
-            sfEventJSON = sfEvent.asDict()
-            self.sf.debug(str(sfEventJSON))
-            
-            response = esClient.index(index=sfEvent.eventType.lower(), doc_type='SpiderFoot', body=sfEventJSON)
-            self.sf.debug(str(response))
+            except ConnectionError:
+              
+               # If maximum number of retry attempts is reached, it's an error
+                if i < tries - 1:
+                    self.sf.debug("Could not connect to Elasticsearch endpoint. Retrying connection.")
+                    continue         
+                
+                self.sf.error("Could not connect to Elasticsearch endpoint. Please verify your endpoint URL", False)
+                
+                self.errorState = True
+                return None
 
-        except Exception as e:
-            import traceback
-            self.sf.error(str(traceback.format_exc()), False)
+            except AuthorizationException:
+                self.sf.error("User not authorized to perform inserts into Elasticsearch cluster.", False)
+                self.errorState = True
+                return None
 
-            self.sf.error(str(e), False)
+            except NotFoundError:
+                self.sf.error("Failed to locate the Elasticsearch resource. Please verify your endpoint URL", False)
+                self.errorState = True
+                return None
 
-        self.sf.debug("Storing an event to Elasticsearch: " + sfEvent.eventType)
+            except Exception as e:
+                
+                self.sf.error("An exception occured : " + str(e))
+                return None
+
 
 # End of sfp__stor_es class
