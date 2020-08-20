@@ -17,6 +17,7 @@ import json
 class sfp__stor_stdout(SpiderFootPlugin):
     """Command-line output::::Dumps output to standard out. Used for when a SpiderFoot scan is run via the command-line."""
 
+<<<<<<< HEAD
     meta = {
         'name': "Command-line output",
         'summary': "Dumps output to standard out. Used for when a SpiderFoot scan is run via the command-line."
@@ -25,6 +26,8 @@ class sfp__stor_stdout(SpiderFootPlugin):
     _priority = 0
     firstEvent = True
 
+=======
+>>>>>>> parent of bd28cf4... Update meta for stor_db & stor_stdout
     # Default options
     opts = {
         "_format": "tab", # tab, csv, json

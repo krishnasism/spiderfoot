@@ -17,6 +17,7 @@ from sflib import SpiderFoot, SpiderFootPlugin
 class sfp__stor_db(SpiderFootPlugin):
     """Storage::::Stores scan results into the back-end SpiderFoot database. You will need this."""
 
+<<<<<<< HEAD
     meta = {
         'name': "Storage",
         'summary': "Stores scan results into the back-end SpiderFoot database. You will need this."
@@ -24,6 +25,8 @@ class sfp__stor_db(SpiderFootPlugin):
 
     _priority = 0
 
+=======
+>>>>>>> parent of bd28cf4... Update meta for stor_db & stor_stdout
     # Default options
     opts = {
         'maxstorage': 1024,  # max bytes for any piece of info stored (0 = unlimited)
