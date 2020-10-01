@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 # -------------------------------------------------------------------------------
-# Name:         sfp_debounce
+# Name:         sfp_nameapi
 # Purpose:      Spiderfoot plugin to check if an email is
-#               disposable using Debounce API.
+#               disposable using nameapi.org API.
 #
 # Author:      Krishnasis Mandal <krishnasis@hotmail.com>
 #
-# Created:     2020-10-01
+# Created:     2020-10-02
 # Copyright:   (c) Steve Micallef
 # Licence:     GPL
 # -------------------------------------------------------------------------------
@@ -14,33 +14,39 @@
 import json
 from spiderfoot import SpiderFootEvent, SpiderFootPlugin
 
-class sfp_debounce(SpiderFootPlugin):
+class sfp_nameapi(SpiderFootPlugin):
 
     meta = {
-        'name': "Debounce",
+        'name': "NameAPI",
         'summary': "Check whether an email is disposable",
         'flags': ["apikey"],
         'useCases': ["Footprint", "Investigate", "Passive"],
         'categories': ["Search Engines"],
         'dataSource': {
-            'website': "https://debounce.io/",
-            'model': "FREE_NOAUTH_UNLIMITED",
+            'website': "https://www.nameapi.org/",
+            'model': "FREE_AUTH_LIMITED",
             'references': [
                 "https://debounce.io/free-disposable-check-api/"
             ],
-            'favIcon': "https://debounce.io/wp-content/uploads/2018/01/favicon-2.png",
-            'logo': "https://debounce.io/wp-content/uploads/2018/01/debounce-logo-2.png",
-            'description': "DeBounce provides a free & powerful API endpoint for checking "
-            "a domain or email address against a realtime up-to-date list of disposable domains."
-            "CORS is enabled for all originating domains, "
-            "so you can call the API directly from your client-side code.",
+            'apiKeyInstructions': [
+                "Visit https://nameapi.org",
+                "Click on 'Get API Key'",
+                "Register a free account",
+                "The API key will be sent to your email"
+            ],
+            'favIcon': "https://www.nameapi.org/fileadmin/favicon.ico",
+            'logo': "https://www.nameapi.org/fileadmin/templates/nameprofiler/images/name-api-logo.png",
+            'description': "The NameAPI DEA-Detector checks email addresses "
+            "against a list of known \"trash domains\" such as mailinator.com.",
         }
     }
 
     opts = {
+        'api_key': ''
     }
 
     optdescs = {
+        'api_key': "API Key for NameAPI"
     }
 
     results = None
@@ -66,19 +72,19 @@ class sfp_debounce(SpiderFootPlugin):
 
     def queryEmailAddr(self, qry):
         res = self.sf.fetchUrl(
-            f"https://disposable.debounce.io?email={qry}",
+            f"http://api.nameapi.org/rest/v5.3/email/disposableemailaddressdetector?apiKey={self.opts['api_key']}&emailAddress={qry}",
             timeout=self.opts['_fetchtimeout'],
             useragent="SpiderFoot"
         )
 
         if res['content'] is None:
-            self.sf.info(f"No Debounce info found for {qry}")
+            self.sf.info(f"No NameAPI info found for {qry}")
             return None
 
         try:
             return json.loads(res['content'])
         except Exception as e:
-            self.sf.error(f"Error processing JSON response from Debounce: {e}")
+            self.sf.error(f"Error processing JSON response from NameAPI: {e}")
 
         return None
 
@@ -93,6 +99,13 @@ class sfp_debounce(SpiderFootPlugin):
 
         self.sf.debug(f"Received event, {eventName}, from {srcModuleName}")
 
+        if self.opts["api_key"] == "":
+            self.sf.error(
+                f"You enabled {self.__class__.__name__} but did not set an API key!"
+            )
+            self.errorState = True
+            return None
+
         self.results[eventData] = True
 
         data = self.queryEmailAddr(eventData)
@@ -104,7 +117,7 @@ class sfp_debounce(SpiderFootPlugin):
         self.notifyListeners(evt)
 
         isDisposable = data.get('disposable')
-        if isDisposable == "true":
+        if isDisposable == "YES":
             evt = SpiderFootEvent("EMAILADDR_DISPOSABLE", eventData, self.__name__, event)
             self.notifyListeners(evt)
         
