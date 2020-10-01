@@ -24,30 +24,23 @@ class sfp_debounce(SpiderFootPlugin):
         'categories': ["Search Engines"],
         'dataSource': {
             'website': "https://debounce.io/",
-            'model': "FREE_AUTH_LIMITED",
+            'model': "FREE_NOAUTH_UNLIMITED",
             'references': [
-                "https://debounce.io/email-verification-api/"
-            ],
-            'apiKeyInstructions': [
-                "Visit https://debounce.io",
-                "Register a free account",
-                "Navigate to https://app.debounce.io/api",
-                "Click on 'Create API Key'",
-                "The API key is listed under 'KEY'"
+                "https://debounce.io/free-disposable-check-api/"
             ],
             'favIcon': "https://debounce.io/wp-content/uploads/2018/01/favicon-2.png",
             'logo': "https://debounce.io/wp-content/uploads/2018/01/debounce-logo-2.png",
-            'description': "DeBounce email list cleaning service allows you to upload "
-            "and validate lists of email addresses quickly and securely.",
+            'description': "DeBounce provides a free & powerful API endpoint for checking "
+            "a domain or email address against a realtime up-to-date list of disposable domains."
+            "CORS is enabled for all originating domains, "
+            "so you can call the API directly from your client-side code.",
         }
     }
 
     opts = {
-        'api_key': ''
     }
 
     optdescs = {
-        "api_key": "API Key for debounce.io"
     }
 
     results = None
@@ -65,7 +58,6 @@ class sfp_debounce(SpiderFootPlugin):
             "EMAILADDR"
         ]
 
-    # What events this module produces
     def producedEvents(self):
         return [
             "EMAILADDR_DISPOSABLE",
@@ -74,7 +66,7 @@ class sfp_debounce(SpiderFootPlugin):
 
     def queryEmailAddr(self, qry):
         res = self.sf.fetchUrl(
-            f"https://api.debounce.io/v1/?api={self.opts['api_key']}&email={qry}",
+            f"https://disposable.debounce.io?email={qry}",
             timeout=self.opts['_fetchtimeout'],
             useragent="SpiderFoot"
         )
@@ -93,6 +85,7 @@ class sfp_debounce(SpiderFootPlugin):
     # Handle events sent to this module
     def handleEvent(self, event):
         eventName = event.eventType
+        srcModuleName = event.module
         eventData = event.data
 
         if self.errorState:
@@ -100,32 +93,19 @@ class sfp_debounce(SpiderFootPlugin):
 
         self.sf.debug(f"Received event, {eventName}, from {srcModuleName}")
 
-        if self.opts["api_key"] == "":
-            self.sf.error(
-                f"You enabled {self.__class__.__name__} but did not set an API key!"
-            )
-            self.errorState = True
-            return None
-
-        if eventData in self.results:
-            self.sf.debug(f"Skipping {eventData}, already checked.")
-            return
-
         self.results[eventData] = True
 
-        content = self.queryEmailAddr(eventData)
+        data = self.queryEmailAddr(eventData)
 
-        if content is None:
+        if data is None:
             return
-        
-        data = json.loads(content)
-        
+               
         evt = SpiderFootEvent("RAW_RIR_DATA", str(data), self.__name__, event)
         self.notifyListeners(evt)
 
-        isFreeEmail = data.get('free_email')
-        if isFreeEmail:
-            evt = SpiderFootEvent("EMAILADDR_DISPOSABLE", eventdata, self.__name__, event)
+        isDisposable = data.get('disposable')
+        if isDisposable == "true":
+            evt = SpiderFootEvent("EMAILADDR_DISPOSABLE", eventData, self.__name__, event)
             self.notifyListeners(evt)
         
 # End of sfp_debounce class
