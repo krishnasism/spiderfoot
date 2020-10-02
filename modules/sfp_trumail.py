@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 # -------------------------------------------------------------------------------
-# Name:         sfp_nameapi
+# Name:         sfp_trumail
 # Purpose:      Spiderfoot plugin to check if an email is
-#               disposable using nameapi.org API.
+#               disposable using trumail.io API.
 #
 # Author:      Krishnasis Mandal <krishnasis@hotmail.com>
 #
@@ -14,39 +14,35 @@
 import json
 from spiderfoot import SpiderFootEvent, SpiderFootPlugin
 
-class sfp_nameapi(SpiderFootPlugin):
+class sfp_trumail(SpiderFootPlugin):
 
     meta = {
-        'name': "NameAPI",
+        'name': "Trumail",
         'summary': "Check whether an email is disposable",
         'flags': ["apikey"],
         'useCases': ["Footprint", "Investigate", "Passive"],
         'categories': ["Search Engines"],
         'dataSource': {
-            'website': "https://www.nameapi.org/",
-            'model': "FREE_AUTH_LIMITED",
+            'website': "https://trumail.io/",
+            'model': "FREE_NOAUTH_UNLIMITED",
             'references': [
-                "https://debounce.io/free-disposable-check-api/"
+                "https://trumail.io/documentation"
             ],
-            'apiKeyInstructions': [
-                "Visit https://nameapi.org",
-                "Click on 'Get API Key'",
-                "Register a free account",
-                "The API key will be sent to your email"
-            ],
-            'favIcon': "https://www.nameapi.org/fileadmin/favicon.ico",
-            'logo': "https://www.nameapi.org/fileadmin/templates/nameprofiler/images/name-api-logo.png",
-            'description': "The NameAPI DEA-Detector checks email addresses "
-            "against a list of known \"trash domains\" such as mailinator.com.",
+            'favIcon': "https://trumail.io/assets/favicon-32x32.png",
+            'logo': "https://trumail.io/assets/images/trumail100.png",
+            'description': "Trumail is a product that was built with the intention of providing "
+            "an easy to use API to software professionals who value a quality audience. "
+            "Your apps registration workflow is one of the most important and complex parts of your software "
+            "and it's very important that you filter user credentials in a way that allows for future use. "
+            "Invalid user credentials, particularly email addresses, should be deemed valid "
+            "and deliverable at the time of signup - That's where we come in.",
         }
     }
 
     opts = {
-        'api_key': ''
     }
 
     optdescs = {
-        'api_key': "API Key for NameAPI"
     }
 
     results = None
@@ -72,19 +68,19 @@ class sfp_nameapi(SpiderFootPlugin):
 
     def queryEmailAddr(self, qry):
         res = self.sf.fetchUrl(
-            f"http://api.nameapi.org/rest/v5.3/email/disposableemailaddressdetector?apiKey={self.opts['api_key']}&emailAddress={qry}",
+            f"https://api.trumail.io/v2/lookups/json?email={qry}",
             timeout=self.opts['_fetchtimeout'],
             useragent="SpiderFoot"
         )
 
         if res['content'] is None:
-            self.sf.info(f"No NameAPI info found for {qry}")
+            self.sf.info(f"No Trumail info found for {qry}")
             return None
 
         try:
             return json.loads(res['content'])
         except Exception as e:
-            self.sf.error(f"Error processing JSON response from NameAPI: {e}")
+            self.sf.error(f"Error processing JSON response from Trumail: {e}")
 
         return None
 
@@ -98,14 +94,7 @@ class sfp_nameapi(SpiderFootPlugin):
             return
 
         self.sf.debug(f"Received event, {eventName}, from {srcModuleName}")
-
-        if self.opts["api_key"] == "":
-            self.sf.error(
-                f"You enabled {self.__class__.__name__} but did not set an API key!"
-            )
-            self.errorState = True
-            return None
-
+       
         self.results[eventData] = True
 
         data = self.queryEmailAddr(eventData)
@@ -117,8 +106,8 @@ class sfp_nameapi(SpiderFootPlugin):
         self.notifyListeners(evt)
 
         isDisposable = data.get('disposable')
-        if isDisposable == "YES":
+        if isDisposable == True:
             evt = SpiderFootEvent("EMAILADDR_DISPOSABLE", eventData, self.__name__, event)
             self.notifyListeners(evt)
         
-# End of sfp_nameapi class
+# End of sfp_trumail class
